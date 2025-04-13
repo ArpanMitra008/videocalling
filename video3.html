@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Group Video Call</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.3.1/peerjs.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      color: #e0f7fa;
+      font-family: 'Segoe UI', sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+    }
+
+    .controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+      margin-top: 20px;
+      width: 90%;
+      max-width: 800px;
+    }
+
+    .controls input {
+      padding: 12px;
+      width: 100%;
+      max-width: 250px;
+      border-radius: 16px;
+      border: none;
+      outline: none;
+      background: rgba(255,255,255,0.08);
+      color: white;
+      text-align: center;
+      font-size: 15px;
+      backdrop-filter: blur(6px);
+      box-shadow: inset 0 0 5px rgba(255, 255, 255, 0.05);
+    }
+
+    #video-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px;
+    }
+
+    video {
+      width: 250px;
+      border-radius: 15px;
+      border: 2px solid #00bcd4;
+      box-shadow: 0 0 15px #00bcd4;
+    }
+
+    .icon-bar {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .icon-btn {
+      font-size: 26px;
+      background: rgba(255,255,255,0.08);
+      border: none;
+      color: #fff;
+      border-radius: 50%;
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 0 8px rgba(0,229,255,0.2);
+      transition: 0.3s ease;
+    }
+
+    .icon-btn:hover {
+      background: rgba(0, 229, 255, 0.3);
+      transform: scale(1.1);
+    }
+
+    .hide {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h2>Group Video Call</h2>
+
+  <div class="controls" id="setup">
+    <input type="text" id="username" placeholder="Enter your name" />
+    <button class="icon-btn" onclick="init()">➡️</button>
+  </div>
+
+  <div class="controls" id="room-setup" style="display:none;">
+    <button class="icon-btn" onclick="createRoom()">➕</button>
+    <input type="text" id="room-id" placeholder="Room ID to join" />
+    <button class="icon-btn" onclick="joinRoom()">🔗</button>
+  </div>
+
+  <div id="video-container">
+    <video id="my-video" autoplay muted></video>
+  </div>
+
+  <div class="icon-bar" id="icon-bar" style="display:none;">
+    <button class="icon-btn" id="mic-btn" onclick="toggleMic()">🎤</button>
+    <button class="icon-btn" id="cam-btn" onclick="toggleCamera()">🎥</button>
+    <button class="icon-btn" onclick="sendReaction('❤️')">❤️</button>
+    <button class="icon-btn" onclick="sendReaction('😂')">😂</button>
+    <button class="icon-btn hide" id="end-call" onclick="endCall()">❌</button>
+    <button class="icon-btn hide" id="leave-call" onclick="leaveCall()">🚪</button>
+  </div>
+
+  <script>
+    let peer, userStream;
+    const peers = {};
+    let isHost = false;
+
+    async function init() {
+      const username = document.getElementById('username').value.trim();
+      if (!username) return alert("Enter a name!");
+
+      document.getElementById('setup').style.display = 'none';
+      document.getElementById('room-setup').style.display = 'flex';
+
+      userStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      document.getElementById('my-video').srcObject = userStream;
+
+      peer = new Peer();
+      peer.on('open', id => console.log('Peer ID:', id));
+      peer.on('call', call => {
+        call.answer(userStream);
+        call.on('stream', stream => addVideoStream(call.peer, stream));
+      });
+    }
+
+    function createRoom() {
+      isHost = true;
+      alert(`Room ID: ${peer.id}`);
+      document.getElementById('room-setup').style.display = 'none';
+      showControls();
+    }
+
+    function joinRoom() {
+      const roomId = document.getElementById('room-id').value.trim();
+      if (!roomId) return alert("Enter Room ID");
+
+      const call = peer.call(roomId, userStream);
+      call.on('stream', stream => addVideoStream(roomId, stream));
+
+      document.getElementById('room-setup').style.display = 'none';
+      showControls();
+    }
+
+    function showControls() {
+      document.getElementById('icon-bar').style.display = 'flex';
+      document.getElementById('leave-call').classList.remove('hide');
+      if (isHost) {
+        document.getElementById('end-call').classList.remove('hide');
+      }
+    }
+
+    function addVideoStream(id, stream) {
+      if (document.getElementById(id)) return;
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.id = id;
+      video.autoplay = true;
+      document.getElementById('video-container').appendChild(video);
+    }
+
+    function toggleMic() {
+      const audioTrack = userStream.getAudioTracks()[0];
+      audioTrack.enabled = !audioTrack.enabled;
+      document.getElementById('mic-btn').textContent = audioTrack.enabled ? '🎤' : '🔇';
+    }
+
+    function toggleCamera() {
+      const videoTrack = userStream.getVideoTracks()[0];
+      videoTrack.enabled = !videoTrack.enabled;
+      document.getElementById('cam-btn').textContent = videoTrack.enabled ? '🎥' : '📷';
+    }
+
+    function sendReaction(emoji) {
+      alert(`Sent: ${emoji}`);
+    }
+
+    function endCall() {
+      alert("Meeting Ended by Host.");
+      window.location.reload();
+    }
+
+    function leaveCall() {
+      alert("You left the meeting.");
+      window.location.reload();
+    }
+  </script>
+</body>
+</html>
